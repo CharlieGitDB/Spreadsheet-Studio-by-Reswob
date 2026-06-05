@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the **Spreadsheet Viewer by Reswob** extension will be documented in this file.
+All notable changes to the **Spreadsheet Studio by Reswob** extension will be documented in this file.
 
 ## [1.0.0] - 2026-06-05
 
