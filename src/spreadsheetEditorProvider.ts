@@ -344,11 +344,68 @@ export class SpreadsheetEditorProvider implements vscode.CustomEditorProvider<Sp
       font-size: 12px;
     }
     .add-btn:hover { opacity: 0.8; }
+
+    /* View mode toggle */
+    .view-toggle {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .view-toggle button {
+      background: transparent;
+      color: var(--fg);
+      border: none;
+      padding: 4px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      border-radius: 0;
+      opacity: 0.6;
+    }
+    .view-toggle button:hover { background: var(--hover); opacity: 0.8; }
+    .view-toggle button.active {
+      background: var(--btn-bg);
+      color: var(--btn-fg);
+      opacity: 1;
+      outline: none;
+    }
+
+    /* Text mode container */
+    .text-container {
+      flex: 1;
+      overflow: auto;
+      display: none;
+      padding: 0;
+      background: var(--bg);
+    }
+    .text-container.visible { display: block; }
+    .text-container pre {
+      margin: 0;
+      padding: 10px;
+      font-family: var(--vscode-editor-fontFamily, 'Consolas', 'Courier New', monospace);
+      font-size: var(--vscode-editor-fontSize, 13px);
+      line-height: 1.5;
+      white-space: pre;
+      tab-size: 4;
+    }
+    .text-container .line-num {
+      display: inline-block;
+      min-width: 45px;
+      text-align: right;
+      padding-right: 12px;
+      opacity: 0.4;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
   <div class="toolbar">
     <span class="file-name" id="fileName"></span>
+    <div class="separator"></div>
+    <div class="view-toggle">
+      <button id="btnViewTable" class="active" title="Table View">Table</button>
+      <button id="btnViewText" title="Text View">Text</button>
+    </div>
     <div class="separator"></div>
     <button id="btnFindReplace" title="Find & Replace">Find & Replace</button>
     <button id="btnAddRow" title="Add Row">+ Row</button>
@@ -376,6 +433,10 @@ export class SpreadsheetEditorProvider implements vscode.CustomEditorProvider<Sp
 
   <div class="table-container" id="tableContainer">
     <table id="spreadsheet"></table>
+  </div>
+
+  <div class="text-container" id="textContainer">
+    <pre id="textContent"></pre>
   </div>
 
   <div class="status-bar">
@@ -803,6 +864,97 @@ export class SpreadsheetEditorProvider implements vscode.CustomEditorProvider<Sp
     function escapeAttr(s) {
       return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
+
+    // ── View mode toggle ──
+    let viewMode = 'table'; // 'table' | 'text'
+    const tableContainer = document.getElementById('tableContainer');
+    const textContainer = document.getElementById('textContainer');
+    const textContent = document.getElementById('textContent');
+    const btnViewTable = document.getElementById('btnViewTable');
+    const btnViewText = document.getElementById('btnViewText');
+
+    // Rainbow colors — theme-aware with good contrast on both light and dark
+    // We use HSL with medium lightness so they're visible on any background
+    function getRainbowColors() {
+      // Detect if theme is light by checking computed background luminance
+      const bg = getComputedStyle(document.body).backgroundColor;
+      const match = bg.match(/\\d+/g);
+      let isLight = false;
+      if (match && match.length >= 3) {
+        const lum = (0.299 * parseInt(match[0]) + 0.587 * parseInt(match[1]) + 0.114 * parseInt(match[2])) / 255;
+        isLight = lum > 0.5;
+      }
+      if (isLight) {
+        return [
+          '#c41a1a', // red
+          '#b45309', // orange
+          '#0e7490', // teal
+          '#15803d', // green
+          '#7c3aed', // violet
+          '#be185d', // pink
+          '#0369a1', // blue
+          '#a16207', // amber
+          '#6d28d9', // purple
+          '#047857', // emerald
+        ];
+      } else {
+        return [
+          '#f87171', // red
+          '#fb923c', // orange
+          '#38bdf8', // sky
+          '#4ade80', // green
+          '#c084fc', // violet
+          '#f472b6', // pink
+          '#60a5fa', // blue
+          '#fbbf24', // amber
+          '#a78bfa', // purple
+          '#34d399', // emerald
+        ];
+      }
+    }
+
+    function renderTextMode() {
+      const data = getData();
+      if (!data.length) { textContent.innerHTML = '<span style="opacity:0.5">Empty sheet</span>'; return; }
+      const colors = getRainbowColors();
+      const maxCols = Math.max(...data.map(r => (r || []).length), 0);
+      let html = '';
+      for (let r = 0; r < data.length; r++) {
+        const row = data[r] || [];
+        html += '<span class="line-num">' + (r + 1) + '</span>';
+        for (let c = 0; c < maxCols; c++) {
+          if (c > 0) html += '<span style="color:' + colors[c % colors.length] + '; opacity:0.5">,</span>';
+          const val = c < row.length ? String(row[c]) : '';
+          const color = colors[c % colors.length];
+          html += '<span style="color:' + color + '">' + escapeHtml(val) + '</span>';
+        }
+        html += '\\n';
+      }
+      textContent.innerHTML = html;
+    }
+
+    function setViewMode(mode) {
+      viewMode = mode;
+      btnViewTable.classList.toggle('active', mode === 'table');
+      btnViewText.classList.toggle('active', mode === 'text');
+      tableContainer.style.display = mode === 'table' ? '' : 'none';
+      textContainer.classList.toggle('visible', mode === 'text');
+      // Hide table-only toolbar buttons in text mode
+      document.getElementById('btnAddRow').style.display = mode === 'text' ? 'none' : '';
+      document.getElementById('btnAddCol').style.display = mode === 'text' ? 'none' : '';
+      document.getElementById('btnDeleteRow').style.display = mode === 'text' ? 'none' : '';
+      document.getElementById('btnDeleteCol').style.display = mode === 'text' ? 'none' : '';
+      document.getElementById('sheetSelect').style.display = mode === 'text' ? 'none' : '';
+      if (mode === 'text') {
+        renderTextMode();
+        statusLeft.textContent = getData().length + ' lines (text mode)';
+      } else {
+        renderTable();
+      }
+    }
+
+    btnViewTable.addEventListener('click', () => setViewMode('table'));
+    btnViewText.addEventListener('click', () => setViewMode('text'));
   </script>
 </body>
 </html>`;
