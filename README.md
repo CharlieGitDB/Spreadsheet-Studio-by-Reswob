@@ -1,8 +1,8 @@
-# Spreadsheet Viewer by Reswob
+# Spreadsheet Studio by Reswob
 
 **View, edit, sort, and search spreadsheets directly inside VS Code.**
 
-![Spreadsheet Viewer by Reswob](media/icon.png)
+![Spreadsheet Studio by Reswob](media/icon.png)
 
 ---
 
