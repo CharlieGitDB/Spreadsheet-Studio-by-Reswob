@@ -2,7 +2,7 @@
 
 **View, edit, sort, and search spreadsheets directly inside VS Code.**
 
-![Spreadsheet Viewer by Reswob](media/icon.svg)
+![Spreadsheet Viewer by Reswob](media/icon.png)
 
 ---
 
