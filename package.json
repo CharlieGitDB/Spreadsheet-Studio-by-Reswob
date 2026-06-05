@@ -1,0 +1,86 @@
+{
+  "name": "reswob-spreadsheet-viewer",
+  "displayName": "Spreadsheet Viewer by Reswob",
+  "description": "Open, view, edit, sort, and search CSV, Excel (.xlsx/.xls), LibreOffice (.ods), and Google Sheets files directly in VS Code.",
+  "version": "1.0.0",
+  "publisher": "CharlieGitDB",
+  "author": {
+    "name": "CharlieGitDB",
+    "email": "charliedevelopmentaccess@gmail.com"
+  },
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CharlieGitDB/reswob-spreadsheet-viewer"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "spreadsheet",
+    "csv",
+    "excel",
+    "xlsx",
+    "ods",
+    "libreoffice",
+    "google sheets",
+    "viewer",
+    "editor",
+    "table"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "reswob.spreadsheetEditor",
+        "displayName": "Reswob Spreadsheet Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.csv"
+          },
+          {
+            "filenamePattern": "*.tsv"
+          },
+          {
+            "filenamePattern": "*.xlsx"
+          },
+          {
+            "filenamePattern": "*.xls"
+          },
+          {
+            "filenamePattern": "*.ods"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "reswob.openSpreadsheet",
+        "title": "Reswob: Open Spreadsheet"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}
