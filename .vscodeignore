@@ -4,5 +4,9 @@ src/**
 .gitignore
 tsconfig.json
 **/*.map
-node_modules/**
 .claude/**
+node_modules/.package-lock.json
+node_modules/sharp/**
+node_modules/@img/**
+node_modules/detect-libc/**
+node_modules/semver/**
