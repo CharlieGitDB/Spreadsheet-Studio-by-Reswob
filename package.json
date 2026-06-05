@@ -3,7 +3,7 @@
   "displayName": "Spreadsheet Studio by Reswob",
   "description": "Open, view, edit, sort, and search CSV, Excel (.xlsx/.xls), LibreOffice (.ods), and Google Sheets files directly in VS Code.",
   "version": "1.0.0",
-  "publisher": "CharlieGitDB",
+  "publisher": "reswob",
   "author": {
     "name": "CharlieGitDB",
     "email": "charliedevelopmentaccess@gmail.com"
