@@ -32,6 +32,20 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+
+  // Explorer right-click entry: open the selected file directly in our editor.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('reswob.openWithEditor', async (uri?: vscode.Uri) => {
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (target) {
+        await vscode.commands.executeCommand(
+          'vscode.openWith',
+          target,
+          'reswob.spreadsheetEditor'
+        );
+      }
+    })
+  );
 }
 
 export function deactivate() {}
