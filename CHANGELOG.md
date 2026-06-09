@@ -2,6 +2,17 @@
 
 All notable changes to the **Spreadsheet Studio by Reswob** extension will be documented in this file.
 
+## [1.0.3] - 2026-06-09
+
+### Fixed
+
+- Text view now correctly shows rainbow syntax highlighting per column. Colors were previously applied with inline style attributes that the webview's Content-Security-Policy blocked, so highlighting silently disappeared. Colors are now driven by nonce'd CSS classes with light/dark theme variants.
+
+### Internal
+
+- Extracted the data parsing/serialization and webview HTML into dedicated modules.
+- Added end-to-end webview tests (jsdom) and data round-trip tests, runnable via `npm test`.
+
 ## [1.0.2] - 2026-06-09
 
 ### Fixed
