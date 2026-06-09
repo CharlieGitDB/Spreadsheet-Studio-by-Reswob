@@ -60,6 +60,13 @@ function click(view: LoadedWebview, id: string): void {
   el!.dispatchEvent(new view.window.MouseEvent('click', { bubbles: true }));
 }
 
+function typeInto(view: LoadedWebview, id: string, value: string): void {
+  const input = view.document.getElementById(id) as HTMLInputElement;
+  assert.ok(input, `expected input #${id} to exist`);
+  input.value = value;
+  input.dispatchEvent(new view.window.Event('input', { bubbles: true }));
+}
+
 test('client posts "ready" on startup so the host knows to send data', () => {
   const view = bootWebview();
   assert.ok(view.posted.some((m) => m.type === 'ready'), 'expected a "ready" message');
@@ -126,4 +133,46 @@ test('an empty sheet renders a safe placeholder in text mode', () => {
   const textHtml = view.document.getElementById('textContent')!.innerHTML;
   assert.match(textHtml, /text-empty/);
   assert.doesNotMatch(textHtml, /style\s*=/i);
+});
+
+test('find in text mode highlights the matching row and current cell', () => {
+  const view = bootWebview();
+  sendLoad(view);
+  click(view, 'btnViewText');
+  click(view, 'btnFindReplace');
+  typeInto(view, 'findInput', 'Berlin');
+
+  const textHtml = view.document.getElementById('textContent')!.innerHTML;
+  assert.match(textHtml, /row-match/, 'the matching line should be tinted');
+  assert.match(textHtml, /hl-current/, 'the current matched cell should be emphasized');
+  assert.equal(view.document.getElementById('matchInfo')!.textContent, '1 / 1');
+  // Highlighting must remain CSP-safe (classes, never inline styles).
+  assert.doesNotMatch(textHtml, /style\s*=/i);
+});
+
+test('find with no match clears highlighting in text mode', () => {
+  const view = bootWebview();
+  sendLoad(view);
+  click(view, 'btnViewText');
+  click(view, 'btnFindReplace');
+  typeInto(view, 'findInput', 'zzzz-nope');
+
+  const textHtml = view.document.getElementById('textContent')!.innerHTML;
+  assert.doesNotMatch(textHtml, /row-match/);
+  assert.equal(view.document.getElementById('matchInfo')!.textContent, '0 / 0');
+});
+
+test('replace in text mode updates the rendered text and notifies the host', () => {
+  const view = bootWebview();
+  sendLoad(view);
+  click(view, 'btnViewText');
+  click(view, 'btnFindReplace');
+  typeInto(view, 'findInput', 'Berlin');
+  typeInto(view, 'replaceInput', 'Munich');
+  click(view, 'btnReplace');
+
+  const textHtml = view.document.getElementById('textContent')!.innerHTML;
+  assert.match(textHtml, /Munich/, 'replacement should appear in the text view');
+  assert.doesNotMatch(textHtml, /Berlin/, 'old value should be gone from the text view');
+  assert.ok(view.posted.some((m) => m.type === 'edit'), 'host should be told the document changed');
 });

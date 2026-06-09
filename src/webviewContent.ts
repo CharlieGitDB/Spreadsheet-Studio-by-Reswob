@@ -30,6 +30,7 @@ export function getWebviewHtml(nonce: string): string {
       --btn-fg: var(--vscode-button-foreground, #fff);
       --btn-hover: var(--vscode-button-hoverBackground, #1177bb);
       --highlight-bg: #ffe08a33;
+      --highlight-strong: #ffd24d66;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -293,6 +294,17 @@ export function getWebviewHtml(nonce: string): string {
     .text-container .text-empty { opacity: 0.5; }
     /* Column separators dimmed; inherit their column color */
     .text-container .rsep { opacity: 0.5; }
+    /* One block per row so an entire matched line can be tinted */
+    .text-container .text-line { display: block; }
+    /* Find highlighting in text mode (CSP-safe: classes, not inline styles) */
+    .text-container .row-match { background: var(--highlight-bg); }
+    .text-container .hl { background: var(--highlight-bg); border-radius: 2px; }
+    .text-container .hl-current {
+      background: var(--highlight-strong);
+      outline: 2px solid var(--btn-bg);
+      outline-offset: -1px;
+      border-radius: 2px;
+    }
 
     /*
      * Rainbow column colors for text mode. Applied via CSS classes (NOT inline
@@ -683,7 +695,7 @@ export function getWebviewHtml(nonce: string): string {
       setData(data);
       notifyEdit();
       doFind();
-      renderTable();
+      render();
     });
 
     document.getElementById('btnReplaceAll').addEventListener('click', () => {
@@ -698,14 +710,14 @@ export function getWebviewHtml(nonce: string): string {
       setData(data);
       notifyEdit();
       doFind();
-      renderTable();
+      render();
     });
 
     function doFind() {
       findMatches = [];
       findIndex = -1;
       const query = findInput.value;
-      if (!query) { matchInfo.textContent = '0 / 0'; renderTable(); return; }
+      if (!query) { matchInfo.textContent = '0 / 0'; render(); return; }
       const data = getData();
       const lower = query.toLowerCase();
       for (let r = 0; r < data.length; r++) {
@@ -718,18 +730,24 @@ export function getWebviewHtml(nonce: string): string {
       }
       if (findMatches.length > 0) findIndex = 0;
       matchInfo.textContent = findMatches.length > 0 ? '1 / ' + findMatches.length : '0 / 0';
-      renderTable();
+      render();
       if (findMatches.length > 0) goToMatch();
     }
 
+    // Move to / reveal the current match in whichever view is active.
     function goToMatch() {
       if (findIndex < 0 || findIndex >= findMatches.length) return;
       const m = findMatches[findIndex];
-      selectCell(m.row, m.col);
       matchInfo.textContent = (findIndex + 1) + ' / ' + findMatches.length;
-      // Scroll into view
-      const td = table.querySelector('td[data-row="' + m.row + '"][data-col="' + m.col + '"]');
-      if (td) td.scrollIntoView({ block: 'center', inline: 'center' });
+      if (viewMode === 'text') {
+        renderTextMode();
+        const el = textContent.querySelector('.hl-current');
+        if (el) el.scrollIntoView({ block: 'center', inline: 'center' });
+      } else {
+        selectCell(m.row, m.col);
+        const td = table.querySelector('td[data-row="' + m.row + '"][data-col="' + m.col + '"]');
+        if (td) td.scrollIntoView({ block: 'center', inline: 'center' });
+      }
     }
 
     function clearFind() {
@@ -738,7 +756,7 @@ export function getWebviewHtml(nonce: string): string {
       findInput.value = '';
       replaceInput.value = '';
       matchInfo.textContent = '0 / 0';
-      renderTable();
+      render();
     }
 
     // Add Row
@@ -816,17 +834,23 @@ export function getWebviewHtml(nonce: string): string {
       const data = getData();
       if (!data.length) { textContent.innerHTML = '<span class="text-empty">Empty sheet</span>'; return; }
       const maxCols = Math.max(...data.map(r => (r || []).length), 0);
+      const current = findIndex >= 0 ? findMatches[findIndex] : null;
       let html = '';
       for (let r = 0; r < data.length; r++) {
         const row = data[r] || [];
-        html += '<span class="line-num">' + (r + 1) + '</span>';
+        const rowHasMatch = findMatches.some(m => m.row === r);
+        let line = '<span class="line-num">' + (r + 1) + '</span>';
         for (let c = 0; c < maxCols; c++) {
           const cls = 'rc' + (c % RAINBOW_COUNT);
-          if (c > 0) html += '<span class="rsep ' + cls + '">,</span>';
+          if (c > 0) line += '<span class="rsep ' + cls + '">,</span>';
           const val = c < row.length ? String(row[c]) : '';
-          html += '<span class="' + cls + '">' + escapeHtml(val) + '</span>';
+          let cellCls = cls;
+          if (findMatches.some(m => m.row === r && m.col === c)) cellCls += ' hl';
+          if (current && current.row === r && current.col === c) cellCls += ' hl-current';
+          line += '<span class="' + cellCls + '">' + escapeHtml(val) + '</span>';
         }
-        html += '\\n';
+        const lineCls = 'text-line' + (rowHasMatch ? ' row-match' : '');
+        html += '<div class="' + lineCls + '">' + line + '</div>';
       }
       textContent.innerHTML = html;
     }
