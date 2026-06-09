@@ -2,6 +2,16 @@
 
 All notable changes to the **Spreadsheet Studio by Reswob** extension will be documented in this file.
 
+## [1.0.4] - 2026-06-09
+
+### Added
+
+- Right-click a supported spreadsheet file (`.csv`, `.tsv`, `.xlsx`, `.xls`, `.ods`) in the Explorer to open it directly in the editor via the new **Open with Spreadsheet Studio** context-menu entry.
+
+### Fixed
+
+- Find & Replace now works in text view: searching tints the matching line, emphasizes and scrolls to the current match, and replacements update the text immediately.
+
 ## [1.0.3] - 2026-06-09
 
 ### Fixed
