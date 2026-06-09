@@ -2,6 +2,12 @@
 
 All notable changes to the **Spreadsheet Studio by Reswob** extension will be documented in this file.
 
+## [1.0.2] - 2026-06-09
+
+### Fixed
+
+- Fixed a fatal syntax error in the webview script that prevented files from loading and all toolbar buttons/interactions from working. A previous change removed required backslash escapes inside the webview template literal, producing an unterminated string literal in the generated script.
+
 ## [1.0.0] - 2026-06-05
 
 ### Added

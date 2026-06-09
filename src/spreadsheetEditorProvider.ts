@@ -878,7 +878,7 @@ export class SpreadsheetEditorProvider implements vscode.CustomEditorProvider<Sp
     function getRainbowColors() {
       // Detect if theme is light by checking computed background luminance
       const bg = getComputedStyle(document.body).backgroundColor;
-      const match = bg.match(/\d+/g);
+      const match = bg.match(/\\d+/g);
       let isLight = false;
       if (match && match.length >= 3) {
         const lum = (0.299 * parseInt(match[0]) + 0.587 * parseInt(match[1]) + 0.114 * parseInt(match[2])) / 255;
@@ -928,7 +928,7 @@ export class SpreadsheetEditorProvider implements vscode.CustomEditorProvider<Sp
           const color = colors[c % colors.length];
           html += '<span style="color:' + color + '">' + escapeHtml(val) + '</span>';
         }
-        html += '\n';
+        html += '\\n';
       }
       textContent.innerHTML = html;
     }
