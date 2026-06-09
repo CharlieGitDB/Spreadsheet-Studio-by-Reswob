@@ -7,6 +7,10 @@ export class SpreadsheetEditorProvider implements vscode.CustomEditorProvider<Sp
   private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentContentChangeEvent<SpreadsheetDocument>>();
   public readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
 
+  // Per-document callback that pushes the current document bytes to its webview,
+  // so the view can be refreshed when the file changes underneath it (e.g. revert).
+  private readonly refreshers = new Map<SpreadsheetDocument, () => void>();
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   async openCustomDocument(
@@ -26,8 +30,9 @@ export class SpreadsheetEditorProvider implements vscode.CustomEditorProvider<Sp
     webviewPanel.webview.options = { enableScripts: true };
     webviewPanel.webview.html = getWebviewHtml(getNonce());
 
+    const ext = path.extname(document.uri.fsPath).toLowerCase();
+
     const sendData = () => {
-      const ext = path.extname(document.uri.fsPath).toLowerCase();
       const { sheets, sheetNames } = parseToSheets(document.data, ext);
 
       webviewPanel.webview.postMessage({
@@ -39,17 +44,26 @@ export class SpreadsheetEditorProvider implements vscode.CustomEditorProvider<Sp
       });
     };
 
-    webviewPanel.webview.onDidReceiveMessage((msg) => {
+    // Allow external refreshes (e.g. revert) to repaint this document's webview.
+    this.refreshers.set(document, sendData);
+
+    const messageSub = webviewPanel.webview.onDidReceiveMessage((msg) => {
       switch (msg.type) {
         case 'ready':
           sendData();
           break;
         case 'edit': {
-          const ext = path.extname(document.uri.fsPath).toLowerCase();
           document.data = serializeSheets(msg.sheets, msg.sheetNames, ext);
           this._onDidChangeCustomDocument.fire({ document });
           break;
         }
+      }
+    });
+
+    webviewPanel.onDidDispose(() => {
+      messageSub.dispose();
+      if (this.refreshers.get(document) === sendData) {
+        this.refreshers.delete(document);
       }
     });
   }
@@ -65,6 +79,8 @@ export class SpreadsheetEditorProvider implements vscode.CustomEditorProvider<Sp
   async revertCustomDocument(document: SpreadsheetDocument, cancellation: vscode.CancellationToken): Promise<void> {
     const data = await vscode.workspace.fs.readFile(document.uri);
     document.data = data;
+    // Reload the on-screen view so it reflects the reverted file contents.
+    this.refreshers.get(document)?.();
   }
 
   async backupCustomDocument(
