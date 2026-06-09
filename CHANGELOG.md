@@ -2,6 +2,21 @@
 
 All notable changes to the **Spreadsheet Studio by Reswob** extension will be documented in this file.
 
+## [1.0.5] - 2026-06-09
+
+### Fixed
+
+- Large spreadsheets no longer fail to render: the column-width calculation could throw a `RangeError` on sheets with more than ~125k rows.
+- Reverting a file (File: Revert File) now reloads the view instead of leaving stale contents on screen.
+- Text view uses a tab separator for `.tsv` files, deleting the last column re-clamps the selection, and reloading resets transient view state (sort, selection, search).
+
+### Performance
+
+- Match highlighting is now O(cells) instead of O(cells × matches) per render.
+- The table uses a single delegated event listener instead of re-binding a listener to every cell on each redraw.
+- Find Next/Previous moves only the current-match marker rather than re-rendering the whole view.
+- Disposed a per-editor webview message listener that was previously leaked.
+
 ## [1.0.4] - 2026-06-09
 
 ### Added
