@@ -386,6 +386,7 @@ export function getWebviewHtml(nonce: string): string {
     let sheets = {};
     let sheetNames = [];
     let currentSheet = '';
+    let fileExt = '';
     let sortCol = -1;
     let sortAsc = true;
     let selectedCell = null; // { row, col }
@@ -395,6 +396,21 @@ export function getWebviewHtml(nonce: string): string {
 
     // Number of distinct rainbow column colors defined in CSS (.rc0 .. .rc9)
     const RAINBOW_COUNT = 10;
+
+    // Widest row in the data. Computed with a loop (not Math.max(...spread)),
+    // which would throw a RangeError once a sheet has more rows than the JS
+    // argument limit (~10^5), breaking rendering on large files.
+    function colCount(data) {
+      let max = 0;
+      for (let i = 0; i < data.length; i++) {
+        const len = (data[i] || []).length;
+        if (len > max) max = len;
+      }
+      return max;
+    }
+
+    // Stable key for a cell, used for O(1) match lookups during rendering.
+    function cellKey(row, col) { return row + ':' + col; }
 
     // Elements
     const table = document.getElementById('spreadsheet');
@@ -417,10 +433,18 @@ export function getWebviewHtml(nonce: string): string {
       if (msg.type === 'load') {
         sheets = msg.sheets;
         sheetNames = msg.sheetNames;
+        fileExt = msg.fileExt || '';
         fileNameEl.textContent = msg.fileName;
         currentSheet = sheetNames[0] || '';
+        // Reset transient view state so a reload (e.g. after revert) starts clean.
+        sortCol = -1;
+        sortAsc = true;
+        selectedCell = null;
+        editingCell = null;
+        findMatches = [];
+        findIndex = -1;
         buildSheetTabs();
-        renderTable();
+        render();
         statusRight.textContent = msg.fileExt.toUpperCase().slice(1) + ' file';
       }
     });
@@ -479,7 +503,11 @@ export function getWebviewHtml(nonce: string): string {
         return;
       }
 
-      const maxCols = Math.max(...data.map(r => (r || []).length), 0);
+      const maxCols = colCount(data);
+      // Precompute matched cells once: avoids an O(cells × matches) scan.
+      const matchSet = new Set();
+      for (const m of findMatches) matchSet.add(cellKey(m.row, m.col));
+
       let html = '<thead><tr><th class="corner">#</th>';
       for (let c = 0; c < maxCols; c++) {
         const arrow = sortCol === c ? (sortAsc ? '▲' : '▼') : '⇅';
@@ -495,10 +523,9 @@ export function getWebviewHtml(nonce: string): string {
         for (let c = 0; c < maxCols; c++) {
           const val = c < row.length ? row[c] : '';
           const isSelected = selectedCell && selectedCell.row === r && selectedCell.col === c;
-          const isMatch = findMatches.some(m => m.row === r && m.col === c);
           let cls = '';
           if (isSelected) cls += ' selected';
-          if (isMatch) cls += ' highlight';
+          if (matchSet.has(cellKey(r, c))) cls += ' highlight';
           html += '<td data-row="' + r + '" data-col="' + c + '" class="' + cls.trim() + '">' + escapeHtml(String(val)) + '</td>';
         }
         html += '</tr>';
@@ -506,35 +533,30 @@ export function getWebviewHtml(nonce: string): string {
       html += '</tbody>';
       table.innerHTML = html;
       statusLeft.textContent = data.length + ' rows, ' + maxCols + ' columns';
+    }
 
-      // Attach header sort click
-      table.querySelectorAll('th[data-col]').forEach(th => {
-        th.addEventListener('click', () => {
-          const col = parseInt(th.getAttribute('data-col'));
-          if (sortCol === col) {
-            sortAsc = !sortAsc;
-          } else {
-            sortCol = col;
-            sortAsc = true;
-          }
-          sortData();
-          renderTable();
-        });
-      });
+    // Event delegation: a single click/dblclick listener for the entire table,
+    // bound once, instead of re-binding listeners to every cell on each render.
+    // Re-binding per cell was O(cells) work and memory churn on every redraw.
+    function closestEl(node, selector) {
+      const el = node && node.closest ? node : (node && node.parentElement);
+      return el ? el.closest(selector) : null;
+    }
+    table.addEventListener('click', (e) => {
+      const td = closestEl(e.target, 'td[data-row]');
+      if (td) { selectCell(parseInt(td.getAttribute('data-row')), parseInt(td.getAttribute('data-col'))); return; }
+      const th = closestEl(e.target, 'th[data-col]');
+      if (th) sortBy(parseInt(th.getAttribute('data-col')));
+    });
+    table.addEventListener('dblclick', (e) => {
+      const td = closestEl(e.target, 'td[data-row]');
+      if (td) startEditing(parseInt(td.getAttribute('data-row')), parseInt(td.getAttribute('data-col')));
+    });
 
-      // Attach cell click
-      table.querySelectorAll('td[data-row]').forEach(td => {
-        td.addEventListener('click', () => {
-          const r = parseInt(td.getAttribute('data-row'));
-          const c = parseInt(td.getAttribute('data-col'));
-          selectCell(r, c);
-        });
-        td.addEventListener('dblclick', () => {
-          const r = parseInt(td.getAttribute('data-row'));
-          const c = parseInt(td.getAttribute('data-col'));
-          startEditing(r, c);
-        });
-      });
+    function sortBy(col) {
+      if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = true; }
+      sortData();
+      renderTable();
     }
 
     function selectCell(row, col) {
@@ -631,7 +653,7 @@ export function getWebviewHtml(nonce: string): string {
       const { row, col } = selectedCell;
       const data = getData();
       const maxRows = data.length;
-      const maxCols = Math.max(...data.map(r => (r||[]).length), 0);
+      const maxCols = colCount(data);
 
       if (e.key === 'ArrowUp' && row > 0) { selectCell(row - 1, col); e.preventDefault(); }
       if (e.key === 'ArrowDown' && row < maxRows - 1) { selectCell(row + 1, col); e.preventDefault(); }
@@ -734,15 +756,20 @@ export function getWebviewHtml(nonce: string): string {
       if (findMatches.length > 0) goToMatch();
     }
 
-    // Move to / reveal the current match in whichever view is active.
+    // Reveal the current match in whichever view is active. Only the
+    // current-match marker is moved (no full re-render), so navigating between
+    // matches stays cheap even on very large sheets.
     function goToMatch() {
       if (findIndex < 0 || findIndex >= findMatches.length) return;
       const m = findMatches[findIndex];
       matchInfo.textContent = (findIndex + 1) + ' / ' + findMatches.length;
       if (viewMode === 'text') {
-        renderTextMode();
-        const el = textContent.querySelector('.hl-current');
-        if (el) el.scrollIntoView({ block: 'center', inline: 'center' });
+        textContent.querySelectorAll('.hl-current').forEach(el => el.classList.remove('hl-current'));
+        const el = textContent.querySelector('[data-r="' + m.row + '"][data-c="' + m.col + '"]');
+        if (el) {
+          el.classList.add('hl-current');
+          el.scrollIntoView({ block: 'center', inline: 'center' });
+        }
       } else {
         selectCell(m.row, m.col);
         const td = table.querySelector('td[data-row="' + m.row + '"][data-col="' + m.col + '"]');
@@ -762,7 +789,7 @@ export function getWebviewHtml(nonce: string): string {
     // Add Row
     document.getElementById('btnAddRow').addEventListener('click', () => {
       const data = getData();
-      const maxCols = data.length > 0 ? Math.max(...data.map(r => (r||[]).length), 1) : 1;
+      const maxCols = data.length > 0 ? Math.max(colCount(data), 1) : 1;
       const insertAt = selectedCell ? selectedCell.row + 1 : data.length;
       data.splice(insertAt, 0, new Array(maxCols).fill(''));
       setData(data);
@@ -802,6 +829,8 @@ export function getWebviewHtml(nonce: string): string {
       for (const row of data) {
         if (selectedCell.col < row.length) row.splice(selectedCell.col, 1);
       }
+      const cols = colCount(data);
+      if (selectedCell.col >= cols) selectedCell.col = Math.max(0, cols - 1);
       setData(data);
       notifyEdit();
       renderTable();
@@ -833,23 +862,27 @@ export function getWebviewHtml(nonce: string): string {
     function renderTextMode() {
       const data = getData();
       if (!data.length) { textContent.innerHTML = '<span class="text-empty">Empty sheet</span>'; return; }
-      const maxCols = Math.max(...data.map(r => (r || []).length), 0);
+      const maxCols = colCount(data);
+      // Precompute matched cells/rows once instead of scanning findMatches per cell.
+      const matchSet = new Set();
+      const matchRows = new Set();
+      for (const m of findMatches) { matchSet.add(cellKey(m.row, m.col)); matchRows.add(m.row); }
       const current = findIndex >= 0 ? findMatches[findIndex] : null;
+      const sep = fileExt === '.tsv' ? '\\t' : ',';
       let html = '';
       for (let r = 0; r < data.length; r++) {
         const row = data[r] || [];
-        const rowHasMatch = findMatches.some(m => m.row === r);
         let line = '<span class="line-num">' + (r + 1) + '</span>';
         for (let c = 0; c < maxCols; c++) {
           const cls = 'rc' + (c % RAINBOW_COUNT);
-          if (c > 0) line += '<span class="rsep ' + cls + '">,</span>';
+          if (c > 0) line += '<span class="rsep ' + cls + '">' + sep + '</span>';
           const val = c < row.length ? String(row[c]) : '';
           let cellCls = cls;
-          if (findMatches.some(m => m.row === r && m.col === c)) cellCls += ' hl';
+          if (matchSet.has(cellKey(r, c))) cellCls += ' hl';
           if (current && current.row === r && current.col === c) cellCls += ' hl-current';
-          line += '<span class="' + cellCls + '">' + escapeHtml(val) + '</span>';
+          line += '<span data-r="' + r + '" data-c="' + c + '" class="' + cellCls + '">' + escapeHtml(val) + '</span>';
         }
-        const lineCls = 'text-line' + (rowHasMatch ? ' row-match' : '');
+        const lineCls = 'text-line' + (matchRows.has(r) ? ' row-match' : '');
         html += '<div class="' + lineCls + '">' + line + '</div>';
       }
       textContent.innerHTML = html;

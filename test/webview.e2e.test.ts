@@ -44,6 +44,8 @@ function bootWebview(): LoadedWebview {
         getState: () => undefined,
         setState: () => undefined,
       });
+      // jsdom doesn't implement scrollIntoView (the real webview, on Chromium, does).
+      (window as any).Element.prototype.scrollIntoView = function () {};
     },
   });
   return { dom, window: dom.window, document: dom.window.document, posted };
@@ -175,4 +177,36 @@ test('replace in text mode updates the rendered text and notifies the host', () 
   assert.match(textHtml, /Munich/, 'replacement should appear in the text view');
   assert.doesNotMatch(textHtml, /Berlin/, 'old value should be gone from the text view');
   assert.ok(view.posted.some((m) => m.type === 'edit'), 'host should be told the document changed');
+});
+
+test('Find Next moves the current-match marker in text mode', () => {
+  const view = bootWebview();
+  // Two occurrences of "x": (row 0, col 0) and (row 1, col 1).
+  sendLoad(view, { ...SAMPLE, sheets: { Sheet1: [['x', 'b'], ['c', 'x']] } });
+  click(view, 'btnViewText');
+  click(view, 'btnFindReplace');
+  typeInto(view, 'findInput', 'x');
+
+  assert.equal(view.document.getElementById('matchInfo')!.textContent, '1 / 2');
+  let current = view.document.querySelector('#textContent .hl-current')!;
+  assert.equal(current.getAttribute('data-r'), '0');
+  assert.equal(current.getAttribute('data-c'), '0');
+
+  click(view, 'btnFindNext');
+
+  assert.equal(view.document.getElementById('matchInfo')!.textContent, '2 / 2');
+  const matches = view.document.querySelectorAll('#textContent .hl-current');
+  assert.equal(matches.length, 1, 'only one cell should be the current match');
+  current = matches[0];
+  assert.equal(current.getAttribute('data-r'), '1');
+  assert.equal(current.getAttribute('data-c'), '1');
+});
+
+test('text mode uses a tab separator for TSV files', () => {
+  const view = bootWebview();
+  sendLoad(view, { ...SAMPLE, fileExt: '.tsv', sheets: { Sheet1: [['a', 'b']] } });
+  click(view, 'btnViewText');
+
+  const sep = view.document.querySelector('#textContent .rsep')!;
+  assert.equal(sep.textContent, '\t', 'TSV columns should be separated by a tab');
 });

@@ -85,7 +85,7 @@
     "compile": "tsc -p ./",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --sourcemap",
     "watch": "tsc -watch -p ./",
-    "test": "node --import tsx --test test/spreadsheetData.test.ts test/webview.e2e.test.ts test/contributions.test.ts",
+    "test": "node --import tsx --test test/spreadsheetData.test.ts test/webview.e2e.test.ts test/webview.perf.test.ts test/contributions.test.ts",
     "package": "vsce package"
   },
   "devDependencies": {
